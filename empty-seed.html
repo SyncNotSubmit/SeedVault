@@ -443,6 +443,34 @@
     background: var(--accent-hover);
   }
 
+  .action-btn.save-needed {
+    background: #ef4444;
+    color: white;
+    border: none;
+    font-weight: 600;
+    animation: pulse 2s infinite;
+  }
+
+  .action-btn.save-needed:hover {
+    background: #dc2626;
+  }
+
+  .action-btn.save-saved {
+    background: #22c55e;
+    color: white;
+    border: none;
+    font-weight: 600;
+  }
+
+  .action-btn.save-saved:hover {
+    background: #16a34a;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.8; }
+  }
+
   .action-btn.danger {
     border-color: #ef4444;
     color: #ef4444;
@@ -1086,6 +1114,12 @@
 <!-- NOTIFICATION -->
 <div class="notification" id="notification"></div>
 
+<!-- EMBEDDED DATA -->
+<script>
+// ─── SAVED WIKI DATA ─────────────────────────────────────────────────────────
+const SAVED_WIKI_DATA = {"collections":[],"pages":[]};
+</script>
+
 <script>
 // ─── DATA ────────────────────────────────────────────────────────────────────
 let collections = [];
@@ -1298,23 +1332,29 @@ function renderTopBar() {
   
   let html = '';
   
+  // Add contextual buttons first
   if (state.activeTab === 'settings') {
-    html = `
+    html += `
       <button class="action-btn primary" id="saveSettingsBtn">Save Settings</button>
     `;
   } else if (state.activeTab === 'pages' && state.activePageId && !state.editing) {
-    html = `
+    html += `
       <button class="action-btn" id="editBtn">Edit</button>
       <button class="action-btn danger" id="deleteBtn">Delete</button>
     `;
   } else if (state.editing) {
-    html = `
+    html += `
       <button class="action-btn primary" id="saveBtn">Save</button>
       <button class="action-btn" id="cancelBtn">Cancel</button>
     `;
   } else if (state.activeTab === 'pages' && !state.activePageId) {
-    html = `<button class="action-btn primary" id="newPageTopBtn">+ New Page</button>`;
+    html += `<button class="action-btn primary" id="newPageTopBtn">+ New Page</button>`;
   }
+  
+  // Add save button at the far right
+  const saveButtonClass = hasUnsavedChanges ? 'save-needed' : 'save-saved';
+  const saveButtonText = hasUnsavedChanges ? 'Save*' : 'Saved';
+  html += `<button class="action-btn ${saveButtonClass}" id="saveWikiBtn">${saveButtonText}</button>`;
   
   actionsContainer.innerHTML = html;
   
@@ -1325,6 +1365,7 @@ function renderTopBar() {
   const cancelBtn = document.getElementById('cancelBtn');
   const newPageTopBtn = document.getElementById('newPageTopBtn');
   const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+  const saveWikiBtn = document.getElementById('saveWikiBtn');
   
   if (editBtn) editBtn.addEventListener('click', () => {
     const page = pages.find(p => p.id === state.activePageId);
@@ -1338,6 +1379,7 @@ function renderTopBar() {
   if (cancelBtn) cancelBtn.addEventListener('click', () => { state.editing = false; render(); });
   if (newPageTopBtn) newPageTopBtn.addEventListener('click', () => { state.creatingPage = true; render(); });
   if (saveSettingsBtn) saveSettingsBtn.addEventListener('click', saveSettings);
+  if (saveWikiBtn) saveWikiBtn.addEventListener('click', saveWikiData);
 }
 
 function renderMainContent() {
@@ -1568,8 +1610,7 @@ function deleteCollection(collectionId) {
   // Delete pages in this collection
   pages = pages.filter(p => p.collectionId !== collectionId);
   
-  // Save to localStorage
-  saveWikiData();
+  hasUnsavedChanges = true;
   
   // Reset active page if it was in this collection
   const activePage = pages.find(p => p.id === state.activePageId);
@@ -1584,6 +1625,7 @@ function deleteCollection(collectionId) {
   }
   
   render();
+  showNotification('Collection deleted. Click Save to preserve changes.');
 }
 
 function renderGraph() {
@@ -1958,10 +2000,11 @@ function createPage() {
   };
   
   pages.push(newPage);
-  saveWikiData();
+  hasUnsavedChanges = true;
   state.activePageId = newPage.id;
   state.creatingPage = false;
   render();
+  showNotification('Page created. Click Save to preserve changes.');
 }
 
 function createCollection() {
@@ -1978,19 +2021,70 @@ function createCollection() {
   };
   
   collections.push(newCol);
-  saveWikiData();
+  hasUnsavedChanges = true;
   state.creatingCollection = false;
   render();
+  showNotification('Collection created. Click Save to preserve changes.');
+}
+
+// ─── FILE HANDLING ───────────────────────────────────────────────────────────
+let hasUnsavedChanges = false;
+
+function updatePageContent() {
+  // Safely serialize the data
+  const serializedData = JSON.stringify({ collections, pages }, null, 2);
+  
+  // Get the current HTML content
+  let htmlContent = document.documentElement.outerHTML;
+  
+  // Simple string replacement approach
+  const oldData = 'const SAVED_WIKI_DATA = {"collections":[],"pages":[]};';
+  const newData = 'const SAVED_WIKI_DATA = ' + serializedData + ';';
+  
+  htmlContent = htmlContent.replace(oldData, newData);
+  
+  return '<!DOCTYPE html>\n' + htmlContent;
 }
 
 function saveWikiData() {
-  localStorage.setItem('seed-wiki-data', JSON.stringify({
-    collections: collections,
-    pages: pages
-  }));
+  const updatedHtml = updatePageContent();
+  
+  // Create blob and trigger download
+  const blob = new Blob([updatedHtml], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  
+  // Use the current filename or default
+  const currentPath = window.location.pathname;
+  const fileName = currentPath.split('/').pop() || 'seed-wiki.html';
+  a.download = fileName;
+  
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  
+  // Mark as saved and update UI
+  hasUnsavedChanges = false;
+  render();
+  
+  showNotification('File downloaded! Replace the original to save changes permanently.');
 }
 
 function loadWikiData() {
+  // Try to load from embedded data first
+  if (typeof SAVED_WIKI_DATA !== 'undefined') {
+    try {
+      collections = SAVED_WIKI_DATA.collections || [];
+      pages = SAVED_WIKI_DATA.pages || [];
+      return;
+    } catch (e) {
+      console.error('Failed to load embedded wiki data:', e);
+    }
+  }
+  
+  // Fallback to localStorage for backward compatibility
   const saved = localStorage.getItem('seed-wiki-data');
   if (saved) {
     try {
@@ -1998,12 +2092,10 @@ function loadWikiData() {
       collections = data.collections || [];
       pages = data.pages || [];
     } catch (e) {
-      console.error('Failed to load wiki data:', e);
-      // Initialize with default data if loading fails
+      console.error('Failed to load wiki data from localStorage:', e);
       initializeDefaultData();
     }
   } else {
-    // Initialize with default data if no saved data exists
     initializeDefaultData();
   }
 }
@@ -2026,23 +2118,20 @@ function savePage() {
     return p;
   });
   
-  // Save to localStorage
-  saveWikiData();
-  
-  // Show save notification
-  showNotification('Page saved successfully!');
-  
+  hasUnsavedChanges = true;
   state.editing = false;
   render();
+  showNotification('Page edited. Click Save to preserve changes.');
 }
 
 function deletePage() {
   if (!confirm('Delete this page?')) return;
   pages = pages.filter(p => p.id !== state.activePageId);
-  saveWikiData();
+  hasUnsavedChanges = true;
   state.activePageId = null;
   state.editing = false;
   render();
+  showNotification('Page deleted. Click Save to preserve changes.');
 }
 
 function insertWikiLink() {
@@ -2071,66 +2160,6 @@ function render() {
   renderMainContent();
 }
 
-// ─── EVENT LISTENERS ─────────────────────────────────────────────────────────
-document.getElementById('searchInput').addEventListener('input', (e) => {
-  state.searchQuery = e.target.value;
-  render();
-});
-
-document.getElementById('allCollectionsBtn').addEventListener('click', () => {
-  state.sidebarCollectionFilter = null;
-  render();
-});
-
-document.getElementById('pagesTab').addEventListener('click', () => {
-  state.activeTab = 'pages';
-  if (graphState.animationFrame) cancelAnimationFrame(graphState.animationFrame);
-  render();
-});
-
-document.getElementById('graphTab').addEventListener('click', () => {
-  state.activeTab = 'graph';
-  render();
-});
-
-document.getElementById('settingsTab').addEventListener('click', () => {
-  state.activeTab = 'settings';
-  render();
-});
-
-document.getElementById('newCollectionBtn').addEventListener('click', () => {
-  state.creatingCollection = true;
-  render();
-});
-
-// Mobile menu functionality
-document.getElementById('mobileMenuBtn').addEventListener('click', () => {
-  const sidebar = document.getElementById('sidebar');
-  const overlay = document.getElementById('sidebarOverlay');
-  
-  sidebar.classList.toggle('open');
-  overlay.classList.toggle('show');
-});
-
-document.getElementById('sidebarOverlay').addEventListener('click', () => {
-  const sidebar = document.getElementById('sidebar');
-  const overlay = document.getElementById('sidebarOverlay');
-  
-  sidebar.classList.remove('open');
-  overlay.classList.remove('show');
-});
-
-// Close sidebar when clicking on a page item (mobile)
-document.addEventListener('click', (e) => {
-  if (window.innerWidth <= 768 && e.target.classList.contains('page-item')) {
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('sidebarOverlay');
-    
-    sidebar.classList.remove('open');
-    overlay.classList.remove('show');
-  }
-});
-
 // ─── INIT ────────────────────────────────────────────────────────────────────
 function loadSettings() {
   const saved = localStorage.getItem('seed-settings');
@@ -2152,9 +2181,77 @@ function loadSettings() {
   }
 }
 
-loadSettings();
-loadWikiData();
-render();
+// Initialize everything when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+  loadSettings();
+  loadWikiData();
+  render();
+  
+  // Use event delegation for dynamically created elements
+  document.addEventListener('input', (e) => {
+    if (e.target.id === 'searchInput') {
+      state.searchQuery = e.target.value;
+      render();
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    // All collections button
+    if (e.target.id === 'allCollectionsBtn') {
+      state.sidebarCollectionFilter = null;
+      render();
+    }
+    
+    // Tab buttons
+    if (e.target.id === 'pagesTab') {
+      state.activeTab = 'pages';
+      if (graphState.animationFrame) cancelAnimationFrame(graphState.animationFrame);
+      render();
+    }
+    
+    if (e.target.id === 'graphTab') {
+      state.activeTab = 'graph';
+      render();
+    }
+    
+    if (e.target.id === 'settingsTab') {
+      state.activeTab = 'settings';
+      render();
+    }
+    
+    if (e.target.id === 'newCollectionBtn') {
+      state.creatingCollection = true;
+      render();
+    }
+    
+    // Mobile menu button
+    if (e.target.id === 'mobileMenuBtn') {
+      const sidebar = document.getElementById('sidebar');
+      const overlay = document.getElementById('sidebarOverlay');
+      
+      sidebar.classList.toggle('open');
+      overlay.classList.toggle('show');
+    }
+    
+    // Sidebar overlay
+    if (e.target.id === 'sidebarOverlay') {
+      const sidebar = document.getElementById('sidebar');
+      const overlay = document.getElementById('sidebarOverlay');
+      
+      sidebar.classList.remove('open');
+      overlay.classList.remove('show');
+    }
+    
+    // Close sidebar when clicking on a page item (mobile)
+    if (window.innerWidth <= 768 && e.target.classList.contains('page-item')) {
+      const sidebar = document.getElementById('sidebar');
+      const overlay = document.getElementById('sidebarOverlay');
+      
+      sidebar.classList.remove('open');
+      overlay.classList.remove('show');
+    }
+  });
+});
 </script>
 
 </body>
