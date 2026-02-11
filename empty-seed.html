@@ -879,6 +879,133 @@
     background: rgba(239,68,68,0.1);
   }
 
+  /* HELP MODAL */
+  .help-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+  }
+
+  .help-modal.show {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .help-content {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: 12px;
+    max-width: 600px;
+    max-height: 80vh;
+    width: 90%;
+    overflow: hidden;
+    transform: scale(0.9);
+    transition: transform 0.3s ease;
+  }
+
+  .help-modal.show .help-content {
+    transform: scale(1);
+  }
+
+  .help-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-primary);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .help-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+  }
+
+  .help-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.15s;
+  }
+
+  .help-close:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+
+  .help-body {
+    padding: 24px;
+    overflow-y: auto;
+    max-height: calc(80vh - 80px);
+  }
+
+  .help-body h2 {
+    font-size: 16px;
+    color: var(--text-primary);
+    margin: 20px 0 12px;
+    font-weight: 600;
+  }
+
+  .help-body h2:first-child {
+    margin-top: 0;
+  }
+
+  .help-body p {
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin: 8px 0;
+  }
+
+  .help-body ul {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0;
+  }
+
+  .help-body li {
+    padding: 4px 0;
+    color: var(--text-muted);
+    position: relative;
+    padding-left: 20px;
+  }
+
+  .help-body li::before {
+    content: "•";
+    color: var(--accent);
+    position: absolute;
+    left: 0;
+    font-weight: bold;
+  }
+
+  .help-body strong {
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+
+  .help-body code {
+    background: var(--bg-tertiary);
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: var(--accent);
+    font-size: 12px;
+    border: 1px solid var(--border-secondary);
+  }
+
   /* MOBILE RESPONSIVE */
   .mobile-menu-btn {
     display: none;
@@ -1113,6 +1240,46 @@
 
 <!-- NOTIFICATION -->
 <div class="notification" id="notification"></div>
+
+<!-- HELP MODAL -->
+<div class="help-modal" id="helpModal">
+  <div class="help-content">
+    <div class="help-header">
+      <h3 class="help-title">Help & Guide</h3>
+      <button class="help-close" id="helpClose">×</button>
+    </div>
+    <div class="help-body">
+      <p>Seed is your personal knowledge capsule - a place to store and connect your thoughts, ideas, and information.</p>
+      
+      <h2>Getting Started</h2>
+      <ul>
+        <li>Click <strong>Edit</strong> to modify a page</li>
+        <li>Use <code>[[Page Title]]</code> to create links between pages</li>
+        <li>Create new pages and collections to organize your knowledge</li>
+        <li>Use the <strong>Graph</strong> tab to visualize connections between your pages</li>
+      </ul>
+      
+      <h2>Features</h2>
+      <ul>
+        <li><strong>Markdown Support</strong>: Write in markdown with live preview</li>
+        <li><strong>Wiki Links</strong>: Connect pages using [[double brackets]]</li>
+        <li><strong>Collections</strong>: Organize pages into themed groups</li>
+        <li><strong>Graph View</strong>: Visualize your knowledge network</li>
+        <li><strong>Dark Themes</strong>: Multiple color themes including Selenized</li>
+        <li><strong>Mobile Responsive</strong>: Works on all devices</li>
+      </ul>
+      
+      <h2>Tips</h2>
+      <ul>
+        <li>The search box helps you find pages quickly</li>
+        <li>Backlinks show you which pages link to the current page</li>
+        <li>All your data is saved to a local file when you click save.</li>
+      </ul>
+      
+      <p>Happy writing!</p>
+    </div>
+  </div>
+</div>
 
 <!-- EMBEDDED DATA -->
 <script>
@@ -1351,6 +1518,9 @@ function renderTopBar() {
     html += `<button class="action-btn primary" id="newPageTopBtn">+ New Page</button>`;
   }
   
+  // Add help button
+  html += `<button class="action-btn" id="helpBtn">?</button>`;
+  
   // Add save button at the far right
   const saveButtonClass = hasUnsavedChanges ? 'save-needed' : 'save-saved';
   const saveButtonText = hasUnsavedChanges ? 'Save*' : 'Saved';
@@ -1366,6 +1536,7 @@ function renderTopBar() {
   const newPageTopBtn = document.getElementById('newPageTopBtn');
   const saveSettingsBtn = document.getElementById('saveSettingsBtn');
   const saveWikiBtn = document.getElementById('saveWikiBtn');
+  const helpBtn = document.getElementById('helpBtn');
   
   if (editBtn) editBtn.addEventListener('click', () => {
     const page = pages.find(p => p.id === state.activePageId);
@@ -1380,6 +1551,7 @@ function renderTopBar() {
   if (newPageTopBtn) newPageTopBtn.addEventListener('click', () => { state.creatingPage = true; render(); });
   if (saveSettingsBtn) saveSettingsBtn.addEventListener('click', saveSettings);
   if (saveWikiBtn) saveWikiBtn.addEventListener('click', saveWikiData);
+  if (helpBtn) helpBtn.addEventListener('click', showHelpModal);
 }
 
 function renderMainContent() {
@@ -2153,6 +2325,16 @@ function insertWikiLink() {
   }, 0);
 }
 
+function showHelpModal() {
+  const modal = document.getElementById('helpModal');
+  modal.classList.add('show');
+}
+
+function hideHelpModal() {
+  const modal = document.getElementById('helpModal');
+  modal.classList.remove('show');
+}
+
 // ─── MAIN RENDER ─────────────────────────────────────────────────────────────
 function render() {
   renderSidebar();
@@ -2249,6 +2431,31 @@ document.addEventListener('DOMContentLoaded', () => {
       
       sidebar.classList.remove('open');
       overlay.classList.remove('show');
+    }
+    
+    // Help modal close button
+    if (e.target.id === 'helpClose') {
+      hideHelpModal();
+    }
+    
+    // Help modal backdrop click
+    if (e.target.id === 'helpModal') {
+      hideHelpModal();
+    }
+    
+    // Help button
+    if (e.target.id === 'helpBtn') {
+      showHelpModal();
+    }
+  });
+  
+  // Help modal keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      const modal = document.getElementById('helpModal');
+      if (modal.classList.contains('show')) {
+        hideHelpModal();
+      }
     }
   });
 });
